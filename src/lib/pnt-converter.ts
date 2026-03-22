@@ -9,17 +9,57 @@ export interface PNTResult {
 
 // ARK painting target types with their resolutions
 export const PAINTING_TARGETS = [
+  // Signs & Canvases
   { name: "Painting Canvas", suffix: "_Sign_Large_Metal_C", width: 256, height: 256 },
-  { name: "War Map", suffix: "_WarMap_C", width: 256, height: 256 },
-  { name: "Single Flag", suffix: "_Flag_C", width: 256, height: 256 },
-  { name: "Multi Panel Flag", suffix: "_FlagMultiPanel_C", width: 256, height: 384 },
   { name: "Wooden Sign", suffix: "_Sign_Small_Wood_C", width: 128, height: 128 },
   { name: "Wooden Billboard", suffix: "_Sign_Large_Wood_C", width: 256, height: 256 },
   { name: "Metal Sign", suffix: "_Sign_Small_Metal_C", width: 128, height: 128 },
   { name: "Metal Billboard", suffix: "_Sign_Large_Metal_C", width: 256, height: 256 },
+  // Flags & Misc
+  { name: "Single Flag", suffix: "_Flag_C", width: 256, height: 256 },
+  { name: "Multi Panel Flag", suffix: "_FlagMultiPanel_C", width: 256, height: 384 },
+  { name: "War Map", suffix: "_WarMap_C", width: 256, height: 256 },
   { name: "Shag Rug", suffix: "_Rug_C", width: 256, height: 256 },
   { name: "Spotlight", suffix: "_Spotlight_C", width: 256, height: 256 },
   { name: "Raft", suffix: "_Raft_C", width: 256, height: 256 },
+  // Human Body Regions
+  { name: "Human (Full Body)", suffix: "_Character_BP_C", width: 512, height: 512 },
+  { name: "Human (Head)", suffix: "_Character_BP_C_Head", width: 256, height: 256 },
+  { name: "Human (Torso)", suffix: "_Character_BP_C_Torso", width: 256, height: 256 },
+  { name: "Human (Left Arm)", suffix: "_Character_BP_C_LeftArm", width: 256, height: 256 },
+  { name: "Human (Right Arm)", suffix: "_Character_BP_C_RightArm", width: 256, height: 256 },
+  { name: "Human (Left Leg)", suffix: "_Character_BP_C_LeftLeg", width: 256, height: 256 },
+  { name: "Human (Right Leg)", suffix: "_Character_BP_C_RightLeg", width: 256, height: 256 },
+  // Dino Body Regions
+  { name: "Dino (Full Body)", suffix: "_Dino_C", width: 256, height: 256 },
+  // Foundations
+  { name: "Stone Foundation", suffix: "_StoneFloor_C", width: 256, height: 256 },
+  { name: "Metal Foundation", suffix: "_MetalFloor_C", width: 256, height: 256 },
+  { name: "Tek Foundation", suffix: "_TekFloor_C", width: 256, height: 256 },
+  { name: "Wood Foundation", suffix: "_WoodFloor_C", width: 256, height: 256 },
+  { name: "Thatch Foundation", suffix: "_ThatchFloor_C", width: 256, height: 256 },
+  // Walls
+  { name: "Stone Wall", suffix: "_StoneWall_C", width: 256, height: 256 },
+  { name: "Metal Wall", suffix: "_MetalWall_C", width: 256, height: 256 },
+  { name: "Tek Wall", suffix: "_TekWall_C", width: 256, height: 256 },
+  { name: "Wood Wall", suffix: "_WoodWall_C", width: 256, height: 256 },
+  // Ceilings
+  { name: "Stone Ceiling", suffix: "_StoneCeiling_C", width: 256, height: 256 },
+  { name: "Metal Ceiling", suffix: "_MetalCeiling_C", width: 256, height: 256 },
+  { name: "Tek Ceiling", suffix: "_TekCeiling_C", width: 256, height: 256 },
+  { name: "Wood Ceiling", suffix: "_WoodCeiling_C", width: 256, height: 256 },
+  // Doors & Gates
+  { name: "Metal Door", suffix: "_MetalDoor_C", width: 256, height: 256 },
+  { name: "Stone Doorframe", suffix: "_StoneDoorframe_C", width: 256, height: 256 },
+  { name: "Metal Dinosaur Gate", suffix: "_MetalGate_Large_C", width: 256, height: 256 },
+  { name: "Behemoth Gate", suffix: "_BehemothGate_C", width: 256, height: 256 },
+  // Other Structures
+  { name: "Stone Pillar", suffix: "_StonePillar_C", width: 256, height: 256 },
+  { name: "Metal Pillar", suffix: "_MetalPillar_C", width: 256, height: 256 },
+  { name: "Tek Pillar", suffix: "_TekPillar_C", width: 256, height: 256 },
+  { name: "Canoe", suffix: "_Canoe_C", width: 256, height: 256 },
+  { name: "Motorboat", suffix: "_Motorboat_C", width: 256, height: 256 },
+  { name: "Shield", suffix: "_Shield_C", width: 256, height: 256 },
 ] as const;
 
 export function convertImageToPNT(
