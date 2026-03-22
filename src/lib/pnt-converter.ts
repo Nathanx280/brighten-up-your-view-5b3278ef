@@ -24,12 +24,6 @@ export const PAINTING_TARGETS = [
   { name: "Raft", suffix: "_Raft_C", width: 256, height: 256 },
   // Human Body Regions
   { name: "Human (Full Body)", suffix: "_Character_BP_C", width: 512, height: 512 },
-  { name: "Human (Head)", suffix: "_Character_BP_C_Head", width: 256, height: 256 },
-  { name: "Human (Torso)", suffix: "_Character_BP_C_Torso", width: 256, height: 256 },
-  { name: "Human (Left Arm)", suffix: "_Character_BP_C_LeftArm", width: 256, height: 256 },
-  { name: "Human (Right Arm)", suffix: "_Character_BP_C_RightArm", width: 256, height: 256 },
-  { name: "Human (Left Leg)", suffix: "_Character_BP_C_LeftLeg", width: 256, height: 256 },
-  { name: "Human (Right Leg)", suffix: "_Character_BP_C_RightLeg", width: 256, height: 256 },
   // Dino Body Regions
   { name: "Dino (Full Body)", suffix: "_Dino_C", width: 256, height: 256 },
   // Foundations
