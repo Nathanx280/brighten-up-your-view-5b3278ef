@@ -109,6 +109,7 @@ export const PAINTING_TARGETS = [
   { name: "Woolly Rhino", suffix: "_Rhino_Character_BP_C", width: 1024, height: 1024 },
   { name: "Yutyrannus", suffix: "_Yutyrannus_Character_BP_C", width: 1024, height: 1024 },
   { name: "Wyvern", suffix: "_Wyvern_Character_BP_Base_C", width: 1024, height: 1024 },
+  { name: "Mek", suffix: "_Mek_Character_BP_C", width: 1024, height: 1024 },
   // Foundations
   { name: "Stone Foundation", suffix: "_StoneFloor_C", width: 256, height: 256 },
   { name: "Metal Foundation", suffix: "_MetalFloor_C", width: 256, height: 256 },
