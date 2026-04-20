@@ -15,6 +15,7 @@ import PaintCanvas from "@/components/PaintCanvas";
 import BatchPanel from "@/components/BatchPanel";
 import PresetsPanel from "@/components/PresetsPanel";
 import HistoryPanel from "@/components/HistoryPanel";
+import AiGenerator from "@/components/AiGenerator";
 
 import { ARK_PALETTE } from "@/lib/ark-palette";
 import { PAINTING_TARGETS, getTargetByKey } from "@/lib/painting-targets";
@@ -23,6 +24,7 @@ import type { DitherMode } from "@/lib/dithering";
 import { convertImage } from "@/lib/convert";
 import { decodePNT, downloadPNT, encodePNT, indicesToImageData } from "@/lib/pnt-codec";
 import { pushHistory } from "@/lib/storage";
+import { getOverlayForTarget } from "@/lib/uv-overlays";
 
 const Index = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,9 +46,18 @@ const Index = () => {
   const [converting, setConverting] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
 
+  // Undo/redo stack of pixel-index snapshots from manual paint edits
+  const undoStack = useRef<Uint8Array[]>([]);
+  const redoStack = useRef<Uint8Array[]>([]);
+  const [, forceTick] = useState(0);
+
   const target = useMemo(
     () => getTargetByKey(targetSuffix) ?? PAINTING_TARGETS[0],
     [targetSuffix]
+  );
+  const overlay = useMemo(
+    () => getOverlayForTarget(target.suffix, target.category),
+    [target]
   );
 
   // Auto-convert pipeline
@@ -151,16 +162,57 @@ const Index = () => {
     toast.success(`Saved ${outputName}`);
   };
 
-  const handlePixelPaint = (x: number, y: number, color: number) => {
-    if (!indices) return;
-    const i = y * target.width + x;
-    if (indices[i] === color) return;
-    const next = new Uint8Array(indices);
-    next[i] = color;
+  const applyIndices = (next: Uint8Array) => {
     setIndices(next);
     setPreviewImageData(indicesToImageData(next, target.width, target.height));
     setPntData(encodePNT(target.width, target.height, next));
   };
+
+  const paintStrokeStarted = useRef(false);
+  const handlePixelPaint = (x: number, y: number, color: number) => {
+    if (!indices) return;
+    const i = y * target.width + x;
+    if (indices[i] === color) return;
+    if (!paintStrokeStarted.current) {
+      // Snapshot before the first edit of a stroke
+      undoStack.current.push(new Uint8Array(indices));
+      if (undoStack.current.length > 50) undoStack.current.shift();
+      redoStack.current = [];
+      paintStrokeStarted.current = true;
+      forceTick((t) => t + 1);
+    }
+    const next = new Uint8Array(indices);
+    next[i] = color;
+    applyIndices(next);
+  };
+
+  // End of stroke when pointer is released anywhere
+  useEffect(() => {
+    const onUp = () => (paintStrokeStarted.current = false);
+    window.addEventListener("pointerup", onUp);
+    return () => window.removeEventListener("pointerup", onUp);
+  }, []);
+
+  const handleUndo = () => {
+    if (!undoStack.current.length || !indices) return;
+    const prev = undoStack.current.pop()!;
+    redoStack.current.push(new Uint8Array(indices));
+    applyIndices(prev);
+    forceTick((t) => t + 1);
+  };
+  const handleRedo = () => {
+    if (!redoStack.current.length || !indices) return;
+    const next = redoStack.current.pop()!;
+    undoStack.current.push(new Uint8Array(indices));
+    applyIndices(next);
+    forceTick((t) => t + 1);
+  };
+
+  // Reset undo when a new image is loaded / target changes
+  useEffect(() => {
+    undoStack.current = [];
+    redoStack.current = [];
+  }, [sourceImage, target]);
 
   const handleToggleColor = (i: number) =>
     setEnabledColors((prev) => {
@@ -194,36 +246,47 @@ const Index = () => {
 
       <main className="container max-w-7xl mx-auto px-4 py-6">
         {!sourceImage ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto pt-12">
-            <div
-              className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".png,.jpg,.jpeg,.bmp,.webp"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-foreground text-lg font-medium">Drop an image</p>
-              <p className="text-muted-foreground text-xs mt-1">PNG · JPG · BMP · WEBP</p>
+          <div className="space-y-4 max-w-4xl mx-auto pt-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div
+                className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.bmp,.webp"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-foreground text-lg font-medium">Drop an image</p>
+                <p className="text-muted-foreground text-xs mt-1">PNG · JPG · BMP · WEBP</p>
+              </div>
+              <div
+                className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
+                onClick={() => pntInputRef.current?.click()}
+              >
+                <input
+                  ref={pntInputRef}
+                  type="file"
+                  accept=".pnt"
+                  className="hidden"
+                  onChange={handlePntImport}
+                />
+                <FileUp className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-foreground text-lg font-medium">Import existing .pnt</p>
+                <p className="text-muted-foreground text-xs mt-1">View, edit & re-export</p>
+              </div>
             </div>
-            <div
-              className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
-              onClick={() => pntInputRef.current?.click()}
-            >
-              <input
-                ref={pntInputRef}
-                type="file"
-                accept=".pnt"
-                className="hidden"
-                onChange={handlePntImport}
+            <div className="glass rounded-lg p-6">
+              <AiGenerator
+                onGenerated={(img, name) => {
+                  setSourceImage(img);
+                  setFileName(name || "AiPainting");
+                  setAdjustments(DEFAULT_ADJUSTMENTS);
+                }}
               />
-              <FileUp className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-foreground text-lg font-medium">Import existing .pnt</p>
-              <p className="text-muted-foreground text-xs mt-1">View, edit & re-export</p>
             </div>
           </div>
         ) : (
@@ -251,13 +314,23 @@ const Index = () => {
 
               <div className="glass rounded-lg p-4">
                 <Tabs defaultValue="adjust">
-                  <TabsList className="grid grid-cols-3 w-full h-8">
+                  <TabsList className="grid grid-cols-4 w-full h-8">
                     <TabsTrigger value="adjust" className="text-xs">Adjust</TabsTrigger>
+                    <TabsTrigger value="ai" className="text-xs">AI</TabsTrigger>
                     <TabsTrigger value="presets" className="text-xs">Presets</TabsTrigger>
                     <TabsTrigger value="batch" className="text-xs">Batch</TabsTrigger>
                   </TabsList>
                   <TabsContent value="adjust" className="pt-3">
                     <AdjustmentsPanel value={adjustments} onChange={setAdjustments} />
+                  </TabsContent>
+                  <TabsContent value="ai" className="pt-3">
+                    <AiGenerator
+                      onGenerated={(img, name) => {
+                        setSourceImage(img);
+                        setFileName(name || "AiPainting");
+                        setAdjustments(DEFAULT_ADJUSTMENTS);
+                      }}
+                    />
                   </TabsContent>
                   <TabsContent value="presets" className="pt-3 space-y-4">
                     <PresetsPanel
@@ -329,6 +402,11 @@ const Index = () => {
                   selectedColor={paintColor}
                   onSelectColor={setPaintColor}
                   onPaint={handlePixelPaint}
+                  onUndo={handleUndo}
+                  onRedo={handleRedo}
+                  canUndo={undoStack.current.length > 0}
+                  canRedo={redoStack.current.length > 0}
+                  overlay={overlay}
                 />
               </div>
 
