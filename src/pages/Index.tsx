@@ -46,9 +46,18 @@ const Index = () => {
   const [converting, setConverting] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
 
+  // Undo/redo stack of pixel-index snapshots from manual paint edits
+  const undoStack = useRef<Uint8Array[]>([]);
+  const redoStack = useRef<Uint8Array[]>([]);
+  const [, forceTick] = useState(0);
+
   const target = useMemo(
     () => getTargetByKey(targetSuffix) ?? PAINTING_TARGETS[0],
     [targetSuffix]
+  );
+  const overlay = useMemo(
+    () => getOverlayForTarget(target.suffix, target.category),
+    [target]
   );
 
   // Auto-convert pipeline
