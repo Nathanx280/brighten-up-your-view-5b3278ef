@@ -47,6 +47,7 @@ const Row = ({
 
 const AdjustmentsPanel = ({ value, onChange }: Props) => {
   const set = <K extends keyof Adjustments>(k: K, v: Adjustments[K]) => onChange({ ...value, [k]: v });
+  const [curvePoints, setCurvePoints] = useState<Record<Channel, CurvePoint[]>>(DEFAULT_CURVES);
 
   return (
     <div className="space-y-4">
