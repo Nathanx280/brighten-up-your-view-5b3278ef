@@ -1,9 +1,12 @@
+import { useState } from "react";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import { RotateCw, FlipHorizontal, FlipVertical, RefreshCw } from "lucide-react";
 import { DEFAULT_ADJUSTMENTS, type Adjustments, type ScaleMode } from "@/lib/image-adjustments";
+import CurvesEditor, { DEFAULT_CURVES, type Channel, type CurvePoint } from "./CurvesEditor";
 
 interface Props {
   value: Adjustments;
