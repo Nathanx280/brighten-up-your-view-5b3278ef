@@ -146,6 +146,16 @@ const AdjustmentsPanel = ({ value, onChange }: Props) => {
           />
         </div>
       )}
+
+      <Separator />
+
+      <CurvesEditor
+        points={curvePoints}
+        onChange={(next, luts) => {
+          setCurvePoints(next);
+          onChange({ ...value, curves: luts });
+        }}
+      />
     </div>
   );
 };
