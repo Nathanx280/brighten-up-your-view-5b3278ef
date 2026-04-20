@@ -303,13 +303,23 @@ const Index = () => {
 
               <div className="glass rounded-lg p-4">
                 <Tabs defaultValue="adjust">
-                  <TabsList className="grid grid-cols-3 w-full h-8">
+                  <TabsList className="grid grid-cols-4 w-full h-8">
                     <TabsTrigger value="adjust" className="text-xs">Adjust</TabsTrigger>
+                    <TabsTrigger value="ai" className="text-xs">AI</TabsTrigger>
                     <TabsTrigger value="presets" className="text-xs">Presets</TabsTrigger>
                     <TabsTrigger value="batch" className="text-xs">Batch</TabsTrigger>
                   </TabsList>
                   <TabsContent value="adjust" className="pt-3">
                     <AdjustmentsPanel value={adjustments} onChange={setAdjustments} />
+                  </TabsContent>
+                  <TabsContent value="ai" className="pt-3">
+                    <AiGenerator
+                      onGenerated={(img, name) => {
+                        setSourceImage(img);
+                        setFileName(name || "AiPainting");
+                        setAdjustments(DEFAULT_ADJUSTMENTS);
+                      }}
+                    />
                   </TabsContent>
                   <TabsContent value="presets" className="pt-3 space-y-4">
                     <PresetsPanel
