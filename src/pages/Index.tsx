@@ -246,36 +246,47 @@ const Index = () => {
 
       <main className="container max-w-7xl mx-auto px-4 py-6">
         {!sourceImage ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto pt-12">
-            <div
-              className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".png,.jpg,.jpeg,.bmp,.webp"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-              <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-foreground text-lg font-medium">Drop an image</p>
-              <p className="text-muted-foreground text-xs mt-1">PNG · JPG · BMP · WEBP</p>
+          <div className="space-y-4 max-w-4xl mx-auto pt-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div
+                className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".png,.jpg,.jpeg,.bmp,.webp"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-foreground text-lg font-medium">Drop an image</p>
+                <p className="text-muted-foreground text-xs mt-1">PNG · JPG · BMP · WEBP</p>
+              </div>
+              <div
+                className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
+                onClick={() => pntInputRef.current?.click()}
+              >
+                <input
+                  ref={pntInputRef}
+                  type="file"
+                  accept=".pnt"
+                  className="hidden"
+                  onChange={handlePntImport}
+                />
+                <FileUp className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+                <p className="text-foreground text-lg font-medium">Import existing .pnt</p>
+                <p className="text-muted-foreground text-xs mt-1">View, edit & re-export</p>
+              </div>
             </div>
-            <div
-              className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
-              onClick={() => pntInputRef.current?.click()}
-            >
-              <input
-                ref={pntInputRef}
-                type="file"
-                accept=".pnt"
-                className="hidden"
-                onChange={handlePntImport}
+            <div className="glass rounded-lg p-6">
+              <AiGenerator
+                onGenerated={(img, name) => {
+                  setSourceImage(img);
+                  setFileName(name || "AiPainting");
+                  setAdjustments(DEFAULT_ADJUSTMENTS);
+                }}
               />
-              <FileUp className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
-              <p className="text-foreground text-lg font-medium">Import existing .pnt</p>
-              <p className="text-muted-foreground text-xs mt-1">View, edit & re-export</p>
             </div>
           </div>
         ) : (
