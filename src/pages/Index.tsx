@@ -162,16 +162,57 @@ const Index = () => {
     toast.success(`Saved ${outputName}`);
   };
 
-  const handlePixelPaint = (x: number, y: number, color: number) => {
-    if (!indices) return;
-    const i = y * target.width + x;
-    if (indices[i] === color) return;
-    const next = new Uint8Array(indices);
-    next[i] = color;
+  const applyIndices = (next: Uint8Array) => {
     setIndices(next);
     setPreviewImageData(indicesToImageData(next, target.width, target.height));
     setPntData(encodePNT(target.width, target.height, next));
   };
+
+  const paintStrokeStarted = useRef(false);
+  const handlePixelPaint = (x: number, y: number, color: number) => {
+    if (!indices) return;
+    const i = y * target.width + x;
+    if (indices[i] === color) return;
+    if (!paintStrokeStarted.current) {
+      // Snapshot before the first edit of a stroke
+      undoStack.current.push(new Uint8Array(indices));
+      if (undoStack.current.length > 50) undoStack.current.shift();
+      redoStack.current = [];
+      paintStrokeStarted.current = true;
+      forceTick((t) => t + 1);
+    }
+    const next = new Uint8Array(indices);
+    next[i] = color;
+    applyIndices(next);
+  };
+
+  // End of stroke when pointer is released anywhere
+  useEffect(() => {
+    const onUp = () => (paintStrokeStarted.current = false);
+    window.addEventListener("pointerup", onUp);
+    return () => window.removeEventListener("pointerup", onUp);
+  }, []);
+
+  const handleUndo = () => {
+    if (!undoStack.current.length || !indices) return;
+    const prev = undoStack.current.pop()!;
+    redoStack.current.push(new Uint8Array(indices));
+    applyIndices(prev);
+    forceTick((t) => t + 1);
+  };
+  const handleRedo = () => {
+    if (!redoStack.current.length || !indices) return;
+    const next = redoStack.current.pop()!;
+    undoStack.current.push(new Uint8Array(indices));
+    applyIndices(next);
+    forceTick((t) => t + 1);
+  };
+
+  // Reset undo when a new image is loaded / target changes
+  useEffect(() => {
+    undoStack.current = [];
+    redoStack.current = [];
+  }, [sourceImage, target]);
 
   const handleToggleColor = (i: number) =>
     setEnabledColors((prev) => {
