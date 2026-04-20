@@ -1,249 +1,349 @@
-import { Upload, Zap, Download, Settings } from "lucide-react";
-import { useRef, useState, useCallback, ChangeEvent, useEffect } from "react";
-import { PAINTING_TARGETS, convertImageToPNT, downloadPNT } from "@/lib/pnt-converter";
-import { ARK_PALETTE } from "@/lib/ark-palette";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Upload, Zap, Download, FileImage, FileUp } from "lucide-react";
+import { toast } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+
 import ColorPalette from "@/components/ColorPalette";
-import ImagePreview from "@/components/ImagePreview";
+import TargetPicker from "@/components/TargetPicker";
+import AdjustmentsPanel from "@/components/AdjustmentsPanel";
+import DitherSelect from "@/components/DitherSelect";
+import PaintCanvas from "@/components/PaintCanvas";
+import BatchPanel from "@/components/BatchPanel";
+import PresetsPanel from "@/components/PresetsPanel";
+import HistoryPanel from "@/components/HistoryPanel";
+
+import { ARK_PALETTE } from "@/lib/ark-palette";
+import { PAINTING_TARGETS, getTargetByKey } from "@/lib/painting-targets";
+import { DEFAULT_ADJUSTMENTS, type Adjustments } from "@/lib/image-adjustments";
+import type { DitherMode } from "@/lib/dithering";
+import { convertImage } from "@/lib/convert";
+import { decodePNT, downloadPNT, encodePNT, indicesToImageData } from "@/lib/pnt-codec";
+import { pushHistory } from "@/lib/storage";
 
 const Index = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pntInputRef = useRef<HTMLInputElement>(null);
+
   const [sourceImage, setSourceImage] = useState<HTMLImageElement | null>(null);
-  const [sourceImageData, setSourceImageData] = useState<ImageData | null>(null);
-  const [fileName, setFileName] = useState<string>("MyPainting");
-  const [selectedTarget, setSelectedTarget] = useState(0);
-  const [dithering, setDithering] = useState(true);
+  const [fileName, setFileName] = useState("MyPainting");
+  const [targetSuffix, setTargetSuffix] = useState<string>(PAINTING_TARGETS[0].suffix);
+  const [dither, setDither] = useState<DitherMode>("floyd-steinberg");
+  const [adjustments, setAdjustments] = useState<Adjustments>(DEFAULT_ADJUSTMENTS);
   const [enabledColors, setEnabledColors] = useState<Set<number>>(
     () => new Set(ARK_PALETTE.map((c) => c.index))
   );
+  const [paintColor, setPaintColor] = useState<number>(1);
+
   const [previewImageData, setPreviewImageData] = useState<ImageData | null>(null);
+  const [indices, setIndices] = useState<Uint8Array | null>(null);
   const [pntData, setPntData] = useState<ArrayBuffer | null>(null);
   const [converting, setConverting] = useState(false);
+  const [historyKey, setHistoryKey] = useState(0);
 
-  const target = PAINTING_TARGETS[selectedTarget];
+  const target = useMemo(
+    () => getTargetByKey(targetSuffix) ?? PAINTING_TARGETS[0],
+    [targetSuffix]
+  );
 
-  const handleFileChange = useCallback((e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // Auto-convert pipeline
+  useEffect(() => {
+    if (!sourceImage) return;
+    setConverting(true);
+    const handle = setTimeout(() => {
+      try {
+        const result = convertImage({
+          source: sourceImage,
+          targetWidth: target.width,
+          targetHeight: target.height,
+          enabledColors,
+          dither,
+          adjustments,
+        });
+        setPreviewImageData(result.previewImageData);
+        setIndices(result.indices);
+        setPntData(result.pntData);
+      } catch (e) {
+        console.error(e);
+        toast.error("Conversion failed");
+      } finally {
+        setConverting(false);
+      }
+    }, 30);
+    return () => clearTimeout(handle);
+  }, [sourceImage, target, enabledColors, dither, adjustments]);
 
+  const loadImageFile = useCallback((file: File) => {
     const baseName = file.name.replace(/\.[^.]+$/, "");
     setFileName(baseName);
-
     const img = new Image();
-    img.onload = () => {
-      setSourceImage(img);
-
-      // Get image data
-      const canvas = document.createElement("canvas");
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext("2d")!;
-      ctx.drawImage(img, 0, 0);
-      setSourceImageData(ctx.getImageData(0, 0, img.width, img.height));
-    };
+    img.onload = () => setSourceImage(img);
+    img.onerror = () => toast.error("Could not read image");
     img.src = URL.createObjectURL(file);
   }, []);
 
-  // Auto-convert when settings change
-  useEffect(() => {
-    if (!sourceImageData) return;
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) loadImageFile(file);
+  };
 
-    setConverting(true);
-    // Use requestAnimationFrame so UI doesn't freeze
-    const timeout = setTimeout(() => {
-      const result = convertImageToPNT(
-        sourceImageData,
-        target.width,
-        target.height,
-        enabledColors,
-        dithering
-      );
-      setPreviewImageData(result.previewImageData);
-      setPntData(result.pntData);
-      setConverting(false);
-    }, 50);
-
-    return () => clearTimeout(timeout);
-  }, [sourceImageData, selectedTarget, enabledColors, dithering, target.width, target.height]);
+  const handlePntImport = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const buffer = await file.arrayBuffer();
+      const decoded = decodePNT(buffer);
+      const img = indicesToImageData(decoded.indices, decoded.width, decoded.height);
+      // Render to canvas then convert that canvas to an image element used as the source
+      const c = document.createElement("canvas");
+      c.width = decoded.width;
+      c.height = decoded.height;
+      c.getContext("2d")!.putImageData(img, 0, 0);
+      const dataUrl = c.toDataURL();
+      const im = new Image();
+      im.onload = () => {
+        setSourceImage(im);
+        setAdjustments({ ...DEFAULT_ADJUSTMENTS, scaleMode: "stretch" });
+        // try to find a matching target by dimensions
+        const match = PAINTING_TARGETS.find(
+          (t) => t.width === decoded.width && t.height === decoded.height
+        );
+        if (match) setTargetSuffix(match.suffix);
+        toast.success(`Imported ${decoded.width}×${decoded.height} .pnt`);
+      };
+      im.src = dataUrl;
+      setFileName(file.name.replace(/\.pnt$/i, ""));
+    } catch (err) {
+      console.error(err);
+      toast.error("Invalid .pnt file");
+    }
+  };
 
   const handleDownload = () => {
     if (!pntData) return;
-    const suffix = target.suffix;
-    downloadPNT(pntData, `${fileName}${suffix}.pnt`);
+    const outputName = `${fileName}${target.suffix}.pnt`;
+    downloadPNT(pntData, outputName);
+
+    if (previewImageData) {
+      const c = document.createElement("canvas");
+      c.width = Math.min(64, target.width);
+      c.height = Math.min(64, target.height);
+      const ctx = c.getContext("2d")!;
+      const tmp = document.createElement("canvas");
+      tmp.width = target.width;
+      tmp.height = target.height;
+      tmp.getContext("2d")!.putImageData(previewImageData, 0, 0);
+      ctx.drawImage(tmp, 0, 0, c.width, c.height);
+      pushHistory({
+        id: crypto.randomUUID(),
+        fileName: outputName,
+        thumbnail: c.toDataURL("image/png"),
+        targetSuffix: target.suffix,
+        width: target.width,
+        height: target.height,
+        createdAt: Date.now(),
+      });
+      setHistoryKey((k) => k + 1);
+    }
+    toast.success(`Saved ${outputName}`);
   };
 
-  const handleToggleColor = (index: number) => {
+  const handlePixelPaint = (x: number, y: number, color: number) => {
+    if (!indices) return;
+    const i = y * target.width + x;
+    if (indices[i] === color) return;
+    const next = new Uint8Array(indices);
+    next[i] = color;
+    setIndices(next);
+    setPreviewImageData(indicesToImageData(next, target.width, target.height));
+    setPntData(encodePNT(target.width, target.height, next));
+  };
+
+  const handleToggleColor = (i: number) =>
     setEnabledColors((prev) => {
-      const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
-      } else {
-        next.add(index);
-      }
-      return next;
+      const n = new Set(prev);
+      n.has(i) ? n.delete(i) : n.add(i);
+      return n;
     });
-  };
-
-  const handleEnableAll = () => {
-    setEnabledColors(new Set(ARK_PALETTE.map((c) => c.index)));
-  };
-
-  const handleDisableAll = () => {
-    setEnabledColors(new Set());
-  };
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="border-b border-border/50 px-4 py-4">
-        <div className="container max-w-6xl mx-auto flex items-center gap-3">
-          <Zap className="w-8 h-8 text-primary fill-primary" />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              ARK <span className="text-primary">PNT</span> Converter
+      <header className="border-b border-border/50 px-4 py-4 sticky top-0 z-20 bg-background/80 backdrop-blur">
+        <div className="container max-w-7xl mx-auto flex items-center gap-3">
+          <Zap className="w-7 h-7 text-primary fill-primary" />
+          <div className="flex-1">
+            <h1 className="text-xl font-bold text-foreground leading-tight">
+              ARK <span className="text-primary">PNT</span> Studio
             </h1>
-            <p className="text-muted-foreground text-sm">
-              Convert images to ARK: Survival Evolved painting files
+            <p className="text-muted-foreground text-xs">
+              Convert, edit & paint .pnt files for ARK: Survival Evolved
             </p>
           </div>
+          {sourceImage && (
+            <Button onClick={handleDownload} disabled={!pntData || converting} className="gap-1.5">
+              <Download className="w-4 h-4" />
+              Download .pnt
+            </Button>
+          )}
         </div>
       </header>
 
-      {/* Main */}
-      <main className="container max-w-6xl mx-auto px-4 py-8 space-y-6">
-        {/* Upload Zone */}
-        {!sourceImage && (
-          <div className="w-full">
-            <div className="relative glass rounded-lg p-8 text-center cursor-pointer transition-all duration-300 hover:border-primary/50">
+      <main className="container max-w-7xl mx-auto px-4 py-6">
+        {!sourceImage ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto pt-12">
+            <div
+              className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
+              onClick={() => fileInputRef.current?.click()}
+            >
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".png,.jpg,.jpeg,.bmp,.webp"
-                className="absolute inset-0 opacity-0 cursor-pointer z-10"
+                className="hidden"
                 onChange={handleFileChange}
               />
-              <div className="space-y-4 py-8">
-                <Upload className="w-12 h-12 mx-auto text-muted-foreground" />
-                <div>
-                  <p className="text-foreground text-xl">Drop your image here</p>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    PNG, JPG, JPEG, BMP, WEBP supported
+              <Upload className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+              <p className="text-foreground text-lg font-medium">Drop an image</p>
+              <p className="text-muted-foreground text-xs mt-1">PNG · JPG · BMP · WEBP</p>
+            </div>
+            <div
+              className="glass rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-all relative"
+              onClick={() => pntInputRef.current?.click()}
+            >
+              <input
+                ref={pntInputRef}
+                type="file"
+                accept=".pnt"
+                className="hidden"
+                onChange={handlePntImport}
+              />
+              <FileUp className="w-12 h-12 mx-auto text-muted-foreground mb-3" />
+              <p className="text-foreground text-lg font-medium">Import existing .pnt</p>
+              <p className="text-muted-foreground text-xs mt-1">View, edit & re-export</p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
+            {/* Sidebar */}
+            <aside className="space-y-4">
+              <div className="glass rounded-lg p-4 space-y-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Target</Label>
+                  <TargetPicker value={targetSuffix} onChange={setTargetSuffix} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">File name</Label>
+                  <Input
+                    value={fileName}
+                    onChange={(e) => setFileName(e.target.value)}
+                    className="h-9"
+                  />
+                  <p className="text-[10px] text-muted-foreground truncate">
+                    Saves as <code className="text-accent">{fileName}{target.suffix}.pnt</code>
                   </p>
                 </div>
+                <DitherSelect value={dither} onChange={setDither} />
               </div>
-            </div>
+
+              <div className="glass rounded-lg p-4">
+                <Tabs defaultValue="adjust">
+                  <TabsList className="grid grid-cols-3 w-full h-8">
+                    <TabsTrigger value="adjust" className="text-xs">Adjust</TabsTrigger>
+                    <TabsTrigger value="presets" className="text-xs">Presets</TabsTrigger>
+                    <TabsTrigger value="batch" className="text-xs">Batch</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="adjust" className="pt-3">
+                    <AdjustmentsPanel value={adjustments} onChange={setAdjustments} />
+                  </TabsContent>
+                  <TabsContent value="presets" className="pt-3 space-y-4">
+                    <PresetsPanel
+                      current={{ targetSuffix, dither, enabledColors, adjustments }}
+                      onApply={(p) => {
+                        setTargetSuffix(p.targetSuffix);
+                        setDither(p.dither);
+                        setEnabledColors(new Set(p.enabledColors));
+                        setAdjustments(p.adjustments);
+                        toast.success(`Loaded preset "${p.name}"`);
+                      }}
+                    />
+                    <Separator />
+                    <HistoryPanel refreshKey={historyKey} />
+                  </TabsContent>
+                  <TabsContent value="batch" className="pt-3">
+                    <BatchPanel
+                      target={target}
+                      enabledColors={enabledColors}
+                      dither={dither}
+                      adjustments={adjustments}
+                    />
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </aside>
+
+            {/* Main canvas */}
+            <section className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="glass rounded-lg p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-foreground text-sm font-medium flex items-center gap-2">
+                      <FileImage className="w-4 h-4" /> Original
+                    </h3>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => {
+                        setSourceImage(null);
+                        setPreviewImageData(null);
+                        setPntData(null);
+                        setIndices(null);
+                        setAdjustments(DEFAULT_ADJUSTMENTS);
+                        if (fileInputRef.current) fileInputRef.current.value = "";
+                      }}
+                    >
+                      New
+                    </Button>
+                  </div>
+                  <div className="bg-muted/20 rounded flex items-center justify-center max-h-[420px] overflow-hidden">
+                    <img
+                      src={sourceImage.src}
+                      alt="Original"
+                      className="max-w-full max-h-[400px] object-contain"
+                    />
+                  </div>
+                  <p className="text-muted-foreground text-xs text-center">
+                    {sourceImage.naturalWidth} × {sourceImage.naturalHeight} px
+                  </p>
+                </div>
+
+                <PaintCanvas
+                  imageData={previewImageData}
+                  width={target.width}
+                  height={target.height}
+                  label={converting ? "Converting..." : "PNT Preview"}
+                  selectedColor={paintColor}
+                  onSelectColor={setPaintColor}
+                  onPaint={handlePixelPaint}
+                />
+              </div>
+
+              <ColorPalette
+                enabledColors={enabledColors}
+                onToggleColor={handleToggleColor}
+                onEnableAll={() => setEnabledColors(new Set(ARK_PALETTE.map((c) => c.index)))}
+                onDisableAll={() => setEnabledColors(new Set())}
+              />
+            </section>
           </div>
         )}
 
-        {/* Editor */}
-        {sourceImage && (
-          <>
-            {/* Settings Bar */}
-            <div className="glass rounded-lg p-4">
-              <div className="flex flex-wrap items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-muted-foreground" />
-                  <span className="text-foreground text-sm font-medium">Settings</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <label className="text-muted-foreground text-sm">Target:</label>
-                  <select
-                    value={selectedTarget}
-                    onChange={(e) => setSelectedTarget(Number(e.target.value))}
-                    className="bg-muted text-foreground text-sm rounded px-2 py-1 border border-border"
-                  >
-                    {PAINTING_TARGETS.map((t, i) => (
-                      <option key={i} value={i}>
-                        {t.name} ({t.width}×{t.height})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <label className="text-muted-foreground text-sm">Dithering:</label>
-                  <button
-                    onClick={() => setDithering(!dithering)}
-                    className={`px-3 py-1 rounded text-sm transition-colors ${
-                      dithering
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {dithering ? "ON" : "OFF"}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <label className="text-muted-foreground text-sm">Name:</label>
-                  <input
-                    type="text"
-                    value={fileName}
-                    onChange={(e) => setFileName(e.target.value)}
-                    className="bg-muted text-foreground text-sm rounded px-2 py-1 border border-border w-40"
-                  />
-                </div>
-
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      setSourceImage(null);
-                      setSourceImageData(null);
-                      setPreviewImageData(null);
-                      setPntData(null);
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                    }}
-                    className="px-3 py-1.5 rounded text-sm bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    New Image
-                  </button>
-                  <button
-                    onClick={handleDownload}
-                    disabled={!pntData || converting}
-                    className="flex items-center gap-1.5 px-4 py-1.5 rounded text-sm bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download .pnt
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Previews */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="glass rounded-lg p-4 space-y-2">
-                <h3 className="text-foreground text-sm font-medium">Original</h3>
-                <img
-                  src={sourceImage.src}
-                  alt="Original"
-                  className="w-full max-h-[400px] object-contain mx-auto rounded"
-                />
-                <p className="text-muted-foreground text-xs text-center">
-                  {sourceImage.width} × {sourceImage.height} px
-                </p>
-              </div>
-
-              <ImagePreview
-                imageData={previewImageData}
-                width={target.width}
-                height={target.height}
-                label={converting ? "Converting..." : "PNT Preview"}
-              />
-            </div>
-
-            {/* Color Palette */}
-            <ColorPalette
-              enabledColors={enabledColors}
-              onToggleColor={handleToggleColor}
-              onEnableAll={handleEnableAll}
-              onDisableAll={handleDisableAll}
-            />
-          </>
-        )}
-
-        {/* Footer Info */}
-        <div className="text-center text-muted-foreground text-xs space-y-1 pb-8">
-          <p>Place downloaded .pnt files in your ARK MyPaintings folder:</p>
+        <div className="text-center text-muted-foreground text-xs space-y-1 pt-8 pb-4">
+          <p>Place .pnt files in your ARK MyPaintings folder:</p>
           <code className="text-accent text-xs">
             Steam/steamapps/common/ARK/ShooterGame/Saved/MyPaintings/
           </code>
