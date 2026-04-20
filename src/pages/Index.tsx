@@ -391,6 +391,11 @@ const Index = () => {
                   selectedColor={paintColor}
                   onSelectColor={setPaintColor}
                   onPaint={handlePixelPaint}
+                  onUndo={handleUndo}
+                  onRedo={handleRedo}
+                  canUndo={undoStack.current.length > 0}
+                  canRedo={redoStack.current.length > 0}
+                  overlay={overlay}
                 />
               </div>
 
