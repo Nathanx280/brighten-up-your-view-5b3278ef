@@ -15,6 +15,7 @@ import PaintCanvas from "@/components/PaintCanvas";
 import BatchPanel from "@/components/BatchPanel";
 import PresetsPanel from "@/components/PresetsPanel";
 import HistoryPanel from "@/components/HistoryPanel";
+import AiGenerator from "@/components/AiGenerator";
 
 import { ARK_PALETTE } from "@/lib/ark-palette";
 import { PAINTING_TARGETS, getTargetByKey } from "@/lib/painting-targets";
@@ -23,6 +24,7 @@ import type { DitherMode } from "@/lib/dithering";
 import { convertImage } from "@/lib/convert";
 import { decodePNT, downloadPNT, encodePNT, indicesToImageData } from "@/lib/pnt-codec";
 import { pushHistory } from "@/lib/storage";
+import { getOverlayForTarget } from "@/lib/uv-overlays";
 
 const Index = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
